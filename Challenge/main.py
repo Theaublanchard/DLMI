@@ -87,13 +87,6 @@ def main(args):
     )
 
     model = unet.UNet(12, 1).cuda(gpu)
-    # optimizer = LARS(
-    #     model.parameters(),
-    #     lr=0,
-    #     weight_decay=args.wd,
-    #     weight_decay_filter=exclude_bias_and_norm,
-    #     lars_adaptation_filter=exclude_bias_and_norm,
-    # )
     optimizer = optim.SGD(model.parameters(),
             lr=args.base_lr, 
             momentum=args.momentum,
