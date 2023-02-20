@@ -1,10 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
-
 from pathlib import Path
 import argparse
 import json
@@ -15,10 +8,8 @@ import time
 from tqdm import tqdm
 import torch
 from torch import nn, optim
-# import torchvision.datasets as datasets
 
 import unet
-# import augmentations as aug
 from augmentations import ct_transform, aug_transform
 from datasetsDMLI import DLMI_Train
 

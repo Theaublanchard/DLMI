@@ -64,10 +64,7 @@ class UpBlock(nn.Module):
     def forward(self, x, skip_x):
 
         out_up = self.up(x)
-        # print("after_up",out_up.shape)
-        # Skip connection (use torch.cat function)
         x = torch.cat((out_up,skip_x),dim=1)
-        # print(x.shape)
         return self.nConvs(x)
 
 class UNet(nn.Module):
@@ -104,45 +101,31 @@ class UNet(nn.Module):
                                                      padding=1, output_padding=1),
                                   nn.Conv2d(64, self.n_classes, kernel_size=3, stride=1, padding=1)
                                   )
-        # self.last_activation = get_activation('Softmax')
 
     
     def forward(self, x):
     # Forward 
-        # print(x.shape)
         skip_inputs = []
         x = self.inc(x) 
-        # print(x.shape)
 
 
         # Forward through encoder
-        # print("Encoder")
         for i, block in enumerate(self.Encoder):
             x = block(x)  
             skip_inputs += [x] 
-            # print(i,x.shape)             
 
-        # We are at the bottleneck.
-        # print("Bottleneck")
         bottleneck = self.bottleneck(x)
-        # print(bottleneck.shape)
 
         # Forward through decoder
         skip_inputs.reverse()
 
         decoded = bottleneck
-        # decoded = x
-        # print("Decoder")
+
         for i, block in enumerate(self.Decoder):
             # Concat with skipconnections
             skipped = skip_inputs[i+1]
-            # skipped = skip_inputs[i]
-            # print(i,skipped.shape, decoded.shape)
             decoded = block(decoded, skipped)
-            # print(decoded.shape)
 
-        # print("Final")
-        # out = self.last_activation(self.outc(decoded))
         out = self.outc(decoded)
         return out
 

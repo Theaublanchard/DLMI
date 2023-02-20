@@ -1,8 +1,10 @@
 from pathlib import Path
 import argparse
 import os
+import numpy as np
+import shutil
 
-from augmentations import ct_transform
+from augmentations import ct_transform, post_process
 from datasetsDMLI import DLMI_Test, DLMI_Train
 from torch.utils.data import DataLoader
 import torch
@@ -10,6 +12,7 @@ from tqdm import tqdm
 
 import pandas as pd
 from unet import UNet
+
 
 def get_arguments():
     parser = argparse.ArgumentParser(description="Evaluate a UNet model", add_help=False)
@@ -23,8 +26,8 @@ def get_arguments():
                         help='Path to the experiment folder, where the model is stored and the results will be stored')
     parser.add_argument("--model-name", type=str, default="model.pth",
                         help='Name of the model to be evaluated')
-    parser.add_argument("--file-name", type=str, default="submission.csv",
-                        help='Name of the submission file')
+    parser.add_argument("--folder-name", type=str, default="submission",
+                        help='Name of the submission folder')
     
     
     # Running
@@ -39,11 +42,12 @@ def get_arguments():
 def main(args):
     print(args)
     gpu = torch.device(args.device)
+
+    folder_path = os.path.join(args.exp_dir, args.folder_name)
+    os.makedirs(folder_path, exist_ok=True)
     
-    # test_path = os.path.join(args.data_dir, 'test')
-    # test_dataset = DLMI_Test(test_path, transform=ct_transform)
-    test_path = os.path.join(args.data_dir, "validation")
-    test_dataset = DLMI_Train(test_path, ct_transform=ct_transform)
+    test_path = os.path.join(args.data_dir, 'test','test')
+    test_dataset = DLMI_Test(test_path, ct_transform=ct_transform)
     test_loader = DataLoader(test_dataset,
                                 batch_size=args.batch_size,
                                 num_workers=args.num_workers,
@@ -56,32 +60,26 @@ def main(args):
     model.load_state_dict(ckpt['model'])
     model.to(gpu)
   
-    dict_list = []
     with torch.no_grad():
         pbar = tqdm(enumerate(test_loader), total=len(test_loader), desc="Evaluating")
-        mae_total = 0
-        batches_seen = 0
-        for i, (x, y,sample_idx) in pbar:
+
+        for i, (x, possible_dose_mask,sample_idx) in pbar:
             x = x.to(gpu).float()
-            y = y.to(gpu).float()
+            possible_dose_mask = possible_dose_mask.to(gpu)
+            # y = y.to(gpu).float()
 
             output = model(x)
 
-            #Compute Mae on the batch
-            mae = torch.mean(torch.abs(output - y), dim=(1, 2, 3))
-            mae = mae.cpu().numpy()
-            sample_idx = sample_idx.numpy()
-            for i in range(len(sample_idx)):
-                dict_list.append({"Id": sample_idx[i], "Expected": mae[i]})
-            batches_seen += 1
-            mae_total += mae.mean()
+            output = post_process(output, possible_dose_mask)
+            output = output.cpu().numpy()
+            for j in range(output.shape[0]):
+                np.save(os.path.join(folder_path, f"sample_{sample_idx[j]}.npy"), output[j])
 
-            pbar.set_postfix_str(f"MAE: {mae_total/batches_seen:.4f}, MAE batch: {mae.mean():.4f}")
-
-    df = pd.DataFrame(dict_list)
-    df.to_csv(os.path.join(args.exp_dir, args.file_name), index=False)
-
-            
+    print("Zipping submission folder...", end="")
+    shutil.make_archive(folder_path, 'zip', folder_path)
+    print("Done")
+    #Delete folder
+    shutil.rmtree(folder_path)
         
 if __name__ == "__main__":
     parser = get_arguments()

@@ -60,3 +60,18 @@ aug_transform = [RandomHorizontalFlipOneShot(p=0.5),
                  RandomRotationOneShot(90, p=0.5),]
 
 test_transform = transforms.Compose([transforms.Normalize(mean_ct, std_ct)])
+
+def post_process(possible_dose_mask, dose):
+    ''' 
+    Post processing of the dose prediction. Given the possible dose mask and the dose prediction, we intersect the two
+
+    Parameters
+    ----------
+    possible_dose_mask : torch.Tensor
+        The possible dose mask. Shape (batch_size, 1, 128, 128)
+    dose : torch.Tensor
+        The dose prediction. Shape (batch_size, 1, 128, 128)
+    '''
+
+    return possible_dose_mask * dose
+    

@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 import os
 import numpy as np
 import torch
+import tqdm
 
 class DLMI_Train(Dataset):
     '''Dataset for the DLMI challenge
@@ -119,4 +120,36 @@ class DLMI_Test(Dataset):
         #Stack the images
         x = torch.cat((ct, possible_dose_mask, structure_masks), dim=0)
         sample_idx = int(self.samples[idx].split('_')[-1])
-        return x, sample_idx
+        return x, possible_dose_mask,sample_idx
+    
+
+def compute_mean_std(loader):
+    mean_ct = 0.
+    std_ct = 0.
+
+    mean_dose = 0.
+    std_dose = 0.
+    nb_samples = 0.
+
+    for (ct, _, _), dose in tqdm(loader):
+        batch_samples = ct.size(0)
+
+        ct = ct.view(batch_samples, ct.size(1), -1)
+        dose = dose.view(batch_samples, dose.size(1), -1)
+
+        mean_ct += ct.mean((1,2)).sum(0)
+        std_ct += ct.std((1,2)).sum(0)
+
+        mean_dose += dose.mean((1,2)).sum(0)
+        std_dose += dose.std((1,2)).sum(0)
+
+        nb_samples += batch_samples
+
+    mean_ct /= nb_samples
+    std_ct /= nb_samples
+
+    mean_dose /= nb_samples
+    std_dose /= nb_samples
+
+    print(f"{mean_ct=}, {std_ct=}, {mean_dose=}, {std_dose=}")
+    return mean_ct, std_ct, mean_dose, std_dose
