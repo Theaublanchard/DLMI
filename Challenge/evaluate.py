@@ -5,7 +5,7 @@ import numpy as np
 import shutil
 
 from augmentations import ct_transform, post_process
-from datasetsDMLI import DLMI_Test, DLMI_Train
+from datasetsDLMI import DLMI_Test, DLMI_Train
 from torch.utils.data import DataLoader
 import torch
 from tqdm import tqdm
@@ -66,7 +66,6 @@ def main(args):
         for i, (x, possible_dose_mask,sample_idx) in pbar:
             x = x.to(gpu).float()
             possible_dose_mask = possible_dose_mask.to(gpu)
-            # y = y.to(gpu).float()
 
             output = model(x)
 

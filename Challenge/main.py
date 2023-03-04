@@ -5,13 +5,14 @@ import math
 import os
 import sys
 import time
+import numpy as np
 from tqdm import tqdm
 import torch
 from torch import nn, optim
 
 import unet
 from augmentations import ct_transform, aug_transform
-from datasetsDMLI import DLMI_Train
+from datasetsDLMI import DLMI_Train
 
 def get_arguments():
     parser = argparse.ArgumentParser(description="Train a UNet model", add_help=False)
@@ -23,8 +24,6 @@ def get_arguments():
     # Checkpoints
     parser.add_argument("--exp-dir", type=Path, default="./exp",
                         help='Path to the experiment folder, where all logs/checkpoints will be stored')
-    parser.add_argument("--log-freq-time", type=int, default=60,
-                        help='Print logs to the stats.txt file every [log-freq-time] seconds')
     parser.add_argument("--save-freq", type=int, default=10,
                         help='Save a checkpoint every [save-freq] epochs')
 
@@ -50,11 +49,13 @@ def get_arguments():
 
 def main(args):
 
-    print(args)
+
     gpu = torch.device(args.device)
 
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     stats_file = open(args.exp_dir / "stats.txt", "a", buffering=1)
+    print(args)
+    print(args, file=stats_file)
     print(" ".join(sys.argv))
     print(" ".join(sys.argv), file=stats_file)
 
@@ -93,7 +94,14 @@ def main(args):
     else:
         start_epoch = 0
 
-    start_time = last_logging = time.time()
+    if (args.exp_dir / "model_val.pth").is_file():
+        print("Found validation checkpoint")
+        best_val_loss = ckpt["loss_val"]
+    else:
+        best_val_loss = np.inf
+    
+
+    start_time = time.time()
     for epoch in range(start_epoch, args.epochs):
 
         epoch_loss_train, lr = train_one_epoch(model, epoch,optimizer, criterion, loader_train,gpu)
@@ -110,6 +118,11 @@ def main(args):
 
         if (epoch + 1) % args.save_freq == 0:
             torch.save(state, args.exp_dir / f"model_{epoch}.pth")
+
+        if epoch_loss_val < best_val_loss:
+            print("Saving best validation checkpoint at epoch", epoch + 1, "with loss", epoch_loss_val,file=stats_file)
+            best_val_loss = epoch_loss_val
+            torch.save(state, args.exp_dir / "model_val.pth")
 
         print(json.dumps({
             "epoch": epoch,
@@ -162,9 +175,10 @@ def train_one_epoch(model, epoch,optimizer, criterion, loader, gpu ):
         loss_epoch += loss.item()
         batches_seen += 1
 
-        pbar.set_postfix_str(f"Loss_batch {loss.item():.4f} - Loss_train_epoch {loss_epoch / (step + 1):.4f} - LR {lr:.4f}")
+        pbar.set_postfix_str(f"Loss_batch {loss.item():.4f} - Loss_train_epoch {loss_epoch / batches_seen:.4f} - LR {lr:.4f}")
 
     return loss_epoch/batches_seen, lr
+
 
 def validate_one_epoch(model, epoch, criterion, loader, gpu):
     model.eval()
@@ -184,7 +198,7 @@ def validate_one_epoch(model, epoch, criterion, loader, gpu):
             loss_epoch += loss.item()
             batches_seen += 1
 
-            pbar.set_postfix_str(f"Loss {loss.item():.4f} - Loss_val_epoch {loss_epoch / (step + 1):.4f}")
+            pbar.set_postfix_str(f"Loss {loss.item():.4f} - Loss_val_epoch {loss_epoch / batches_seen:.4f}")
 
     return loss_epoch/batches_seen
 

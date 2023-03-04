@@ -1,7 +1,20 @@
 import numpy as np
 from torchvision import transforms
 
-class RandomRotationOneShot():
+class GeomTransform():
+    ''' Base class for geometric transformations that need to be applied to all
+        images, masks included.'''
+    def __init__(self) -> None:
+        pass
+
+    def __call__(self, x):
+        return x
+    
+    def update_params(self):
+        pass
+
+
+class RandomRotationOneShot(GeomTransform):
     def __init__(self, angle, p=0.5):	
         self.angle = angle
         self.p = p
@@ -17,7 +30,8 @@ class RandomRotationOneShot():
         self.rotate = np.random.uniform() < self.p
         self.rotate_angle = np.random.uniform(-self.angle, self.angle)
 
-class RandomHorizontalFlipOneShot():
+
+class RandomHorizontalFlipOneShot(GeomTransform):
     def __init__(self, p=0.5):
         self.p = p
         self.flip = None
@@ -30,7 +44,8 @@ class RandomHorizontalFlipOneShot():
     def update_params(self):
         self.flip = np.random.uniform() < self.p
 
-class RandomVerticalFlipOneShot():
+
+class RandomVerticalFlipOneShot(GeomTransform):
     def __init__(self, p=0.5):
         self.p = p
         self.flip = None
@@ -44,20 +59,32 @@ class RandomVerticalFlipOneShot():
         self.flip = np.random.uniform() < self.p
 
 
+class RandomGaussianBlur(GeomTransform):
+    def __init__(self, kernel_size = 5, sigma = None, p=0.5):
+        self.kernel_size = kernel_size
+        self.sigma = sigma
+        self.p = p
+        self.blur = None
+
+    def __call__(self, x):
+        if self.blur:
+            x = transforms.functional.gaussian_blur(x, self.kernel_size, self.sigma)
+        return x
+
+    def update_params(self):
+        self.blur = np.random.uniform() < self.p
+
+
 mean_ct = 97.59464646559495
 std_ct = 298.82489850204036 
 mean_dose = 2.945620140701685 
 std_dose =  10.749361438151379
 
 ct_transform = transforms.Compose([transforms.Normalize(mean_ct, std_ct)])
-# dose_transform = transforms.Compose([transforms.Normalize(mean_dose, std_dose)])
-# aug_transform = transforms.Compose([transforms.RandomHorizontalFlip(p=0.5),
-#                                     transforms.RandomVerticalFlip(p=0.5),
-#                                     transforms.RandomRotation(90, fill=(0,)),
-#                                     ])
 aug_transform = [RandomHorizontalFlipOneShot(p=0.5),
                  RandomVerticalFlipOneShot(p=0.5),
-                 RandomRotationOneShot(90, p=0.5),]
+                 RandomRotationOneShot(90, p=0.5),
+                 RandomGaussianBlur(p=0.5,sigma=0.5)]
 
 test_transform = transforms.Compose([transforms.Normalize(mean_ct, std_ct)])
 
