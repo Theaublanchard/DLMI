@@ -30,6 +30,7 @@ def _make_nConv(in_channels, out_channels, nb_Conv, activation='ReLU'):
         layers.append(ConvBatchNorm(out_channels, out_channels, activation))
     return nn.Sequential(*layers)
 
+
 class DownBlock(nn.Module):
     """Downscaling with maxpooling and convolutions"""
     def __init__(self, in_channels, out_channels, nb_Conv, activation='ReLU'):
@@ -43,15 +44,16 @@ class DownBlock(nn.Module):
         out_nconvs = self.nConvs(out_maxpool)
         return out_nconvs
 
+
 class Bottleneck(nn.Module):
     def __init__(self, in_channels, out_channels, nb_Conv=2, activation='ReLU'):
         super(Bottleneck, self).__init__()
         self.nConvs = _make_nConv(in_channels, out_channels, nb_Conv, activation)
 
-
     def forward(self, input):
         out = self.nConvs(input)
         return out
+
 
 class UpBlock(nn.Module):
     """Upscaling then conv"""
@@ -67,19 +69,19 @@ class UpBlock(nn.Module):
         x = torch.cat((out_up,skip_x),dim=1)
         return self.nConvs(x)
 
+
 class UNet(nn.Module):
     def __init__(self, n_channels=12, n_classes=1):
         '''
         n_channels : number of channels of the input. 
-                        By default 4, because we have 4 modalities
+                        By default 12
         n_labels : number of channels of the ouput.
-                      By default 4 (3 labels + 1 for the background)
+                      By default 1
         '''
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
 
-        # Question here
         self.inc = ConvBatchNorm(n_channels, 64)
         self.down1 =  DownBlock(64,128,2)
         self.down2 =  DownBlock(128,256,2)
@@ -104,6 +106,8 @@ class UNet(nn.Module):
 
     
     def forward(self, x):
+        '''x shape : (batch_size, n_channels, height, width)'''
+        # possible_dose_mask = x[:,1:2,:,:].clone()
     # Forward 
         skip_inputs = []
         x = self.inc(x) 
@@ -127,5 +131,6 @@ class UNet(nn.Module):
             decoded = block(decoded, skipped)
 
         out = self.outc(decoded)
+        # return possible_dose_mask*out
         return out
 

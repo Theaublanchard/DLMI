@@ -1,6 +1,7 @@
 from pathlib import Path
 import argparse
 import os
+import sys
 import numpy as np
 import shutil
 
@@ -40,6 +41,9 @@ def get_arguments():
     return parser
 
 def main(args):
+    stats_file = open(args.exp_dir / "stats.txt", "a", buffering=1)
+    print(args, file=stats_file)
+    print(" ".join(sys.argv), file=stats_file)
     print(args)
     gpu = torch.device(args.device)
 
