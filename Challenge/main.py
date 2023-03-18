@@ -88,7 +88,7 @@ def main(args):
     if args.weight_reg is None:
         criterion = nn.L1Loss()
     else:
-        criterion = lambda x, y: nn.L1Loss()(x, y) + Gradient_loss(args.weight_reg)(x, y)
+        criterion = lambda x, y: nn.L1Loss()(x, y) + Gradient_loss(args.weight_reg,device = gpu)(x, y)
 
     if (args.exp_dir / "model.pth").is_file():
         print("resuming from checkpoint")
@@ -209,7 +209,7 @@ def validate_one_epoch(model, epoch, criterion, loader, gpu):
 
 
 class Gradient_loss(nn.Module):
-    def __init__(self,weigth_reg) -> None:
+    def __init__(self,weigth_reg,device) -> None:
         '''
         Computes the gradient of an image
         '''
@@ -226,9 +226,11 @@ class Gradient_loss(nn.Module):
         b = b.unsqueeze(0).unsqueeze(0)
         self.conv_hor.weight = nn.Parameter(a).requires_grad_(False)
         self.conv_ver.weight = nn.Parameter(b).requires_grad_(False)
+        self.conv_hor.to(device)
+        self.conv_ver.to(device)
         self.weigth_reg = weigth_reg
 
-    def forward(self, x):
+    def forward(self, x,y):
         conved_hor = self.conv_hor(x)
         conved_ver = self.conv_ver(x)
         grad = torch.sqrt(torch.square(conved_hor) + torch.square(conved_ver))
