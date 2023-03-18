@@ -38,6 +38,8 @@ def get_arguments():
                         help='Weight decay')
     parser.add_argument("--momentum", type=float, default=0.9,
                         help='Momentum')
+    parser.add_argument("--weight-reg", type=float, default=None,
+                        help="Gradient regularization weight")
 
     # Running
     parser.add_argument("--num-workers", type=int, default=0)
@@ -83,7 +85,10 @@ def main(args):
             lr=args.base_lr, 
             momentum=args.momentum,
             weight_decay=args.wd)
-    criterion = nn.L1Loss()
+    if args.weight_reg is None:
+        criterion = nn.L1Loss()
+    else:
+        criterion = lambda x, y: nn.L1Loss()(x, y) + Gradient_loss(args.weight_reg)(x, y)
 
     if (args.exp_dir / "model.pth").is_file():
         print("resuming from checkpoint")
@@ -202,6 +207,33 @@ def validate_one_epoch(model, epoch, criterion, loader, gpu):
 
     return loss_epoch/batches_seen
 
+
+class Gradient_loss(nn.Module):
+    def __init__(self,weigth_reg) -> None:
+        '''
+        Computes the gradient of an image
+        '''
+        super().__init__()
+        self.conv_hor = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+        self.conv_ver = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+        a = torch.tensor([[1.,2.,1.],
+                            [0,0,0],
+                            [-1.,-2.,-1.]], requires_grad=False)
+        b = torch.tensor([[1.,0,-1.],
+                            [2.,0,-2.],
+                            [1.,0,-1.]], requires_grad=False)
+        a = a.unsqueeze(0).unsqueeze(0).requires_grad_(False)
+        b = b.unsqueeze(0).unsqueeze(0)
+        self.conv_hor.weight = nn.Parameter(a).requires_grad_(False)
+        self.conv_ver.weight = nn.Parameter(b).requires_grad_(False)
+        self.weigth_reg = weigth_reg
+
+    def forward(self, x):
+        conved_hor = self.conv_hor(x)
+        conved_ver = self.conv_ver(x)
+        grad = torch.sqrt(torch.square(conved_hor) + torch.square(conved_ver))
+        # return self.weigth_reg * torch.sum(grad)
+        return self.weigth_reg * torch.mean(grad)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('UNet training script', parents=[get_arguments()])
