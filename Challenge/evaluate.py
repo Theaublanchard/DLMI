@@ -30,6 +30,16 @@ def get_arguments():
     parser.add_argument("--folder-name", type=str, default="submission",
                         help='Name of the submission folder')
     
+    # Model
+    parser.add_argument("--channels_list", type=str, default="64,128,256,512,1024", required=False,
+                        help='List of the number of channels for each block. Must be of length 5.')
+    parser.add_argument("--num_classes", type=int, default=1, required=False,
+                        help='Number of classes for the pixel_wise regression task')
+    parser.add_argument("--n_channels", type=int, default=12, required=False,
+                        help='Number of channels in the input image')
+    parser.add_argument("--post-process", type=bool, default=False, required=False,
+                        help='Whether to apply a post-processing step to the predictions during evaluation')
+
     
     # Running
     parser.add_argument("--num-workers", type=int, default=0)
@@ -60,7 +70,8 @@ def main(args):
     
     model_path = os.path.join(args.exp_dir, args.model_name)
     ckpt = torch.load(model_path)
-    model = UNet(12, 1)
+    channels_list = [int(x) for x in args.channels_list.split(",")]
+    model = UNet(args.n_channels, args.num_classes, channels_list,args.post_process)    
     model.load_state_dict(ckpt['model'])
     model.to(gpu)
   

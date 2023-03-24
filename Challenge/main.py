@@ -14,6 +14,11 @@ import unet
 from augmentations import ct_transform, aug_transform
 from datasetsDLMI import DLMI_Train
 
+
+torch.manual_seed(1312)
+np.random.seed(1312)
+
+
 def get_arguments():
     parser = argparse.ArgumentParser(description="Train a UNet model", add_help=False)
 
@@ -21,10 +26,20 @@ def get_arguments():
     parser.add_argument("--data-dir", type=Path, default="/path/to/datasets", required=True,
                         help='Path to the datasets')
 
+    # Model
+    parser.add_argument("--channels_list", type=str, default="64,128,256,512,1024", required=False,
+                        help='List of the number of channels for each block. Must be of length 5.')
+    parser.add_argument("--num_classes", type=int, default=1, required=False,
+                        help='Number of classes for the pixel_wise regression task')
+    parser.add_argument("--n_channels", type=int, default=12, required=False,
+                        help='Number of channels in the input image')
+    parser.add_argument("--post-process", type=bool, default=False, required=False,
+                        help='Whether to apply a post-processing step to the predictions during training')
+
     # Checkpoints
     parser.add_argument("--exp-dir", type=Path, default="./exp",
                         help='Path to the experiment folder, where all logs/checkpoints will be stored')
-    parser.add_argument("--save-freq", type=int, default=10,
+    parser.add_argument("--save-freq", type=int, default=None,
                         help='Save a checkpoint every [save-freq] epochs')
 
     # Optim
@@ -80,7 +95,8 @@ def main(args):
         pin_memory=True,
     )
 
-    model = unet.UNet(12, 1).cuda(gpu)
+    channels_list = [int(x) for x in args.channels_list.split(",")]
+    model = unet.UNet(args.n_channels, args.num_classes, channels_list,args.post_process).cuda(gpu)
     optimizer = optim.SGD(model.parameters(),
             lr=args.base_lr, 
             momentum=args.momentum,
@@ -121,7 +137,7 @@ def main(args):
         )
         torch.save(state, args.exp_dir / "model.pth")
 
-        if (epoch + 1) % args.save_freq == 0:
+        if args.save_freq is not None and (epoch + 1) % args.save_freq == 0:
             torch.save(state, args.exp_dir / f"model_{epoch}.pth")
 
         if epoch_loss_val < best_val_loss:
@@ -140,6 +156,7 @@ def main(args):
 
 
 def adjust_learning_rate(args, optimizer, loader, step,gpu):
+    '''Warmup for the first 10 epochs, then cosine decay'''
     max_steps = args.epochs * len(loader)
     warmup_steps = 10 * len(loader)
     base_lr = args.base_lr * args.batch_size / 128
@@ -211,7 +228,12 @@ def validate_one_epoch(model, epoch, criterion, loader, gpu):
 class Gradient_loss(nn.Module):
     def __init__(self,weigth_reg,device) -> None:
         '''
-        Computes the gradient of an image
+        Computes the gradient of an image using Sobel filters.
+        When called, returns the the mean squared norm of the gradient of the input image.
+
+        Args:
+            weigth_reg (float): Weight of the regularization term.
+            device (str): Device to use.
         '''
         super().__init__()
         self.conv_hor = nn.Conv2d(1, 1, 3, padding=1, bias=False)
@@ -233,9 +255,10 @@ class Gradient_loss(nn.Module):
     def forward(self, x,y):
         conved_hor = self.conv_hor(x)
         conved_ver = self.conv_ver(x)
-        grad = torch.sqrt(torch.square(conved_hor) + torch.square(conved_ver))
+        # To keep differentiability
+        grad_squarred = torch.square(conved_hor) + torch.square(conved_ver)
         # return self.weigth_reg * torch.sum(grad)
-        return self.weigth_reg * torch.mean(grad)
+        return self.weigth_reg * torch.mean(grad_squarred)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('UNet training script', parents=[get_arguments()])
