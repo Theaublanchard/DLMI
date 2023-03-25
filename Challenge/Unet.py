@@ -71,44 +71,50 @@ class UpBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels=12, n_classes=1):
+    def __init__(self, n_channels=12, n_classes=1, channels_list=[64,128,256,512,1024], use_pos_dose_mask=False):
         '''
         n_channels : number of channels of the input. 
                         By default 12
         n_labels : number of channels of the ouput.
                       By default 1
+        channels_list : list of the number of channels for each block. Must be of length 5.
+        use_pos_dose_mask : if True, the model will include a post processing step to remove the dose outside the mask.
         '''
         super(UNet, self).__init__()
+        
+        assert len(channels_list) == 5, f"channels_list must be of length 5, got {len(channels_list)}"
+
         self.n_channels = n_channels
         self.n_classes = n_classes
+        self.use_pos_dose_mask = use_pos_dose_mask
 
-        self.inc = ConvBatchNorm(n_channels, 64)
-        self.down1 =  DownBlock(64,128,2)
-        self.down2 =  DownBlock(128,256,2)
-        self.down3 =  DownBlock(256,512,2)
-        self.down4 =  DownBlock(512,1024,2)
+        self.inc = ConvBatchNorm(n_channels, channels_list[0])
+        self.down1 =  DownBlock(channels_list[0],channels_list[1],2)
+        self.down2 =  DownBlock(channels_list[1],channels_list[2],2)
+        self.down3 =  DownBlock(channels_list[2],channels_list[3],2)
+        self.down4 =  DownBlock(channels_list[3],channels_list[4],2)
 
         self.Encoder = [self.down1, self.down2, self.down3, self.down4]
 
-        self.bottleneck = Bottleneck(1024, 1024)
+        self.bottleneck = Bottleneck(channels_list[4], channels_list[4])
 
-        self.up1 = UpBlock(1024,512,2)
-        self.up2 = UpBlock(512,256,2)
-        self.up3 = UpBlock(256,128,2)
+        self.up1 = UpBlock(channels_list[4],channels_list[3],2)
+        self.up2 = UpBlock(channels_list[3],channels_list[2],2)
+        self.up3 = UpBlock(channels_list[2],channels_list[1],2)
 
         self.Decoder = [self.up1, self.up2, self.up3]
 
-        self.outc = nn.Sequential(nn.ConvTranspose2d(128, 64, 
-                                                     kernel_size=3, stride=2, 
-                                                     padding=1, output_padding=1),
-                                  nn.Conv2d(64, self.n_classes, kernel_size=3, stride=1, padding=1)
-                                  )
+        self.outc = nn.Sequential(nn.ConvTranspose2d(channels_list[1], channels_list[0],
+                                                        kernel_size=3, stride=2,
+                                                        padding=1, output_padding=1),
+                                    nn.Conv2d(channels_list[0], self.n_classes, kernel_size=3, stride=1, padding=1),
+                                )
 
     
     def forward(self, x):
         '''x shape : (batch_size, n_channels, height, width)'''
-        # possible_dose_mask = x[:,1:2,:,:].clone()
-    # Forward 
+        possible_dose_mask = x[:,1:2,:,:].clone()
+        # Forward 
         skip_inputs = []
         x = self.inc(x) 
 
@@ -131,6 +137,10 @@ class UNet(nn.Module):
             decoded = block(decoded, skipped)
 
         out = self.outc(decoded)
-        # return possible_dose_mask*out
-        return out
+
+        if self.use_pos_dose_mask:
+            return possible_dose_mask*out
+        else:
+            return out
+
 
